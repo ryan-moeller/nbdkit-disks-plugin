@@ -232,7 +232,7 @@ disk_block_size(void *handle, uint32_t *minimum, uint32_t *preferred,
 	}
 	*preferred = MAX(*minimum, stripesize);
 	len = sizeof(maxphys);
-	if (sysctl(mib, sizeof(mib), &maxphys, &len, NULL, 0) == -1) {
+	if (sysctl(mib, nitems(mib), &maxphys, &len, NULL, 0) == -1) {
 		nbdkit_error("sysctl: failed to get kern.maxphys: %m");
 		return -1;
 	}
