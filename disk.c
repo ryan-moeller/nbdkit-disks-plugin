@@ -246,8 +246,8 @@ disk_flush(void *handle, uint32_t flags __unused)
 {
 	struct handle *h = handle;
 
-	if (fdatasync(h->fd) == -1) {
-		nbdkit_error("fdatasync: %m");
+	if (ioctl(h->fd, DIOCGFLUSH) == -1) {
+		nbdkit_error("ioctl: DIOCGFLUSH failed: %m");
 		return -1;
 	}
 	return 0;
@@ -290,8 +290,10 @@ disk_pwrite(void *handle, const void *buf, uint32_t len, uint64_t offset,
 		len -= rv;
 		offset += rv;
 	}
-	if ((flags & NBDKIT_FLAG_FUA) != 0 && disk_flush(h, 0) == -1)
+	if ((flags & NBDKIT_FLAG_FUA) != 0 && fdatasync(h->fd) == -1) {
+		nbdkit_error("fdatasync failed: %m");
 		return -1;
+	}
 	return 0;
 }
 
@@ -307,8 +309,10 @@ disk_trim(void *handle, uint32_t len, uint64_t offset, uint32_t flags)
 		nbdkit_error("ioctl: DIOCGDELETE failed: %s: %m", filename);
 		return -1;
 	}
-	if ((flags & NBDKIT_FLAG_FUA) != 0 && disk_flush(h, 0) == -1)
+	if ((flags & NBDKIT_FLAG_FUA) != 0 && fdatasync(h->fd) == -1) {
+		nbdkit_error("fdatasync failed: %m");
 		return -1;
+	}
 	return 0;
 }
 
