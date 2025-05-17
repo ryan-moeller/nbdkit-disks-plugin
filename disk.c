@@ -322,6 +322,7 @@ static struct nbdkit_plugin plugin = {
 	.magic_config_key = disk_magic_config_key,
 	.config_help = disk_config_help,
 	.config = disk_config,
+	.config_complete = disk_config_complete,
 	.open = disk_open,
 	.close = disk_close,
 	.can_write = disk_can_write,
