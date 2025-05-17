@@ -1,13 +1,15 @@
 LOCALBASE?=	/usr/local
 
-SHLIB_NAME=	nbdkit-disk-plugin.so
+SHLIB_NAME=	nbdkit-disks-plugin.so
 SHLIBDIR=	${LOCALBASE}/lib/nbdkit/plugins
 
-SRCS+=		disk.c
+SRCS+=		disks.c
 
 CFLAGS+=	-I${LOCALBASE}/include
+# XXX: pkg install libucl (base ucl is private)
+LDFLAGS+=	-L${LOCALBASE}/lib -lucl -lnv
 
 # TODO
-#MAN=	nbdkit-disk-plugin.1
+#MAN=	nbdkit-disks-plugin.1
 
 .include <bsd.lib.mk>
