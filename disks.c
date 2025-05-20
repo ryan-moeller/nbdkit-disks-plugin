@@ -211,14 +211,14 @@ parse_export(const ucl_object_t *obj, nvlist_t *config)
 	nvlist_t *props;
 	int error;
 
-	props = nvlist_create(0);
-	if (props == NULL) {
-		nbdkit_error("could not allocate props nvlist");
-		return -1;
-	}
 	name = ucl_object_key(obj);
 	if (name == NULL) {
 		nbdkit_error("invalid object in config");
+		return -1;
+	}
+	props = nvlist_create(0);
+	if (props == NULL) {
+		nbdkit_error("could not allocate props nvlist");
 		return -1;
 	}
 	switch (ucl_object_type(obj)) {
