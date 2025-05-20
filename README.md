@@ -77,7 +77,7 @@ EOD
 set -e
 read NAME
 read DEV
-PROV=$(geom -p ${DEV#/dev/} | awk -F ': ' '$1 == "Geom name" { print $2 }')
+PROV=${DEV#/dev/}
 gpart destroy -F $PROV
 mdconfig -du $PROV
 EOD
