@@ -24,22 +24,35 @@ version in ports does not support reporting block size properties of the device.
 While libucl is part of the base system, it is a private library not to be used
 by third party software, hence needing to install it separately as well.
 
-## Usage
+The example below uses git to clone the sources from GitHub, but one could
+simply download the sources as a ZIP from GitHub using fetch.
 
-Serve a 40GB ZFS volume named `storage/nbdvol` as an export named `nbdvol`:
+## Building
+
+Clone, build, and install the plugin:
 
 ```
-# make
+$ git clone https://github.com/ryan-moeller/nbdkit-disks-plugin.git
+$ cd nbdkit-disks-plugin
+$ make
+# make install # (optional) avoid needing to specify full path to shared library
+```
+
+## Usage
+
+Serve a 40GB ZFS volume named `storage/nbdvol` as an export named `nbdvol`
+without running `make install`:
+
+```
 # zfs create -V 40G storage/nbdvol
 # echo nbdvol /dev/zvol/storage/nbdvol >nbdkit.conf
 # nbdkit ./nbdkit-disks-plugin.so nbdkit.conf
 ```
 
 Dynamically create and partition a swap-backed memory disk for every connection
-to the export named "md":
+to the export named "md" after running `make install`:
 
 ```
-# make install # (optional) avoid needing full path to shared library
 # cat >nbdkit.conf <<EOF
 md {
     # Environment variables provided to the hooks
