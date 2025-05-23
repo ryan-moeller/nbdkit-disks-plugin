@@ -226,7 +226,7 @@ parse_export(const ucl_object_t *obj, nvlist_t *config)
 		error = parse_export_object(obj, props);
 		if (error != 0) {
 			nvlist_destroy(props);
-			nbdkit_error("invalid object '%s' in config", name);
+			nbdkit_error("invalid export '%s' in config", name);
 			return error;
 		}
 		break;
@@ -235,7 +235,7 @@ parse_export(const ucl_object_t *obj, nvlist_t *config)
 		break;
 	default:
 		nvlist_destroy(props);
-		nbdkit_error("invalid object '%s' in config", name);
+		nbdkit_error("invalid export '%s' in config", name);
 		return -1;
 	}
 	nvlist_move_nvlist(config, name, props);
