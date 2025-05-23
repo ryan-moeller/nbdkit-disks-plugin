@@ -196,9 +196,9 @@ parse_export_object(const ucl_object_t *obj, nvlist_t *props)
 			return -1;
 		}
 	}
-	/* TODO: properly validate required properties are present */
-	if (nvlist_empty(props)) {
-		nbdkit_debug("empty export object is invalid");
+	if (!nvlist_exists_string(props, "path") &&
+	    !nvlist_exists_string(props, "open")) {
+		nbdkit_debug("missing required 'path' or 'open' property");
 		return -1;
 	}
 	return 0;
