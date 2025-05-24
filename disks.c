@@ -498,11 +498,13 @@ disks_open(int readonly)
 	/* TODO: pattern/prefix matching? */
 
 	error = pthread_rwlock_rdlock(&config_lock);
+	assert(error == 0);
 	default_props = dnvlist_get_nvlist(current_config, "default", NULL);
 	export_props = dnvlist_get_nvlist(current_config, name, default_props);
 	props = export_props == NULL ? NULL : nvlist_clone(export_props);
 	/* TODO: fill in missing fields with default props? */
-	pthread_rwlock_unlock(&config_lock);
+	error = pthread_rwlock_unlock(&config_lock);
+	assert(error == 0);
 	if (props == NULL) {
 		return NULL;
 	}
