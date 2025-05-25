@@ -1,0 +1,47 @@
+freebsd_instance:
+  cpu: 2
+  memory: 2G
+
+task:
+  matrix:
+    - name: releases/amd64/13.5-RELEASE
+      freebsd_instance:
+        image_family: freebsd-13-5
+    - name: releases/amd64/14.2-RELEASE
+      freebsd_instance:
+        image_family: freebsd-14-2
+    - name: snapshots/amd64/15.0-CURRENT
+      freebsd_instance:
+        image_family: freebsd-15-0-snap
+  stateful: false
+  env:
+    NBDKIT_TAG: v1.43.9
+    NBDKIT: /tmp/nbdkit
+    PATH: /usr/local/sbin:${PATH}
+
+  setup_script:
+    - pkg install -y
+      autoconf
+      automake
+      bash
+      bzip2
+      ca_root_nss
+      git-lite
+      gmake
+      gnutls
+      gzip
+      libtool
+      libucl
+      pkgconf
+      zstd
+    - git clone --branch ${NBDKIT_TAG} https://gitlab.com/nbdkit/nbdkit ${NBDKIT}
+  nbdkit_build_script:
+    - cd ${NBDKIT} && autoreconf -i && ./configure
+    - cd ${NBDKIT} && gmake -j${CIRRUS_CPU} && gmake install
+  build_script:
+    - make
+    - make install
+  # TODO: write manpage
+  #manlint_script:
+  #  - make manlint
+  # TODO: write tests
