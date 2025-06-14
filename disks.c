@@ -102,8 +102,7 @@ disks_unload(void)
 	assert(error == 0);
 	error = pthread_cond_signal(&config_cond);
 	assert(error == 0);
-	error = pthread_join(config_thread, NULL);
-	assert(error == 0);
+	(void)pthread_join(config_thread, NULL);
 	free(__DECONST(char *, filename));
 	nvlist_destroy(current_config);
 	error = pthread_cond_destroy(&config_cond);
