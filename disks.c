@@ -682,22 +682,24 @@ disks_open(int readonly)
 			return NULL;
 		}
 		path = fgetln(fp, &len);
-		if (path != NULL && len <= PATH_MAX) {
-			memcpy(buf, path, len);
-			if (buf[len - 1] == '\n') {
-				buf[len - 1] = '\0';
-			} else if (len == PATH_MAX) {
+		if (path != NULL) {
+			if (len > PATH_MAX ||
+			    (len == PATH_MAX && path[len - 1] != '\n')) {
 				nbdkit_error("open command '%s' produced "
 				    "invalid path", cmd);
 				(void)hook_close(fp, pid);
 				nvlist_destroy(props);
 				return NULL;
+			}
+			assert(len <= sizeof(buf));
+			memcpy(buf, path, len);
+			if (buf[len - 1] == '\n') {
+				buf[len - 1] = '\0';
 			} else {
+				assert(len < sizeof(buf));
 				buf[len] = '\0';
 			}
 			path = buf;
-		} else {
-			path = NULL;
 		}
 		error = hook_close(fp, pid);
 		assert(error != -1);
