@@ -686,6 +686,12 @@ disks_open(int readonly)
 			memcpy(buf, path, len);
 			if (buf[len - 1] == '\n') {
 				buf[len - 1] = '\0';
+			} else if (len == PATH_MAX) {
+				nbdkit_error("open command '%s' produced "
+				    "invalid path", cmd);
+				(void)hook_close(fp, pid);
+				nvlist_destroy(props);
+				return NULL;
 			} else {
 				buf[len] = '\0';
 			}
