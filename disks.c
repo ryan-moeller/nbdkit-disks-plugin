@@ -481,7 +481,7 @@ disks_open(int readonly)
 {
 	char buf[PATH_MAX];
 	const char *name, *key, *cmd, *path;
-	const nvlist_t *default_props, *export_props, *env;
+	const nvlist_t *default_props, *export_props;
 	nvlist_t *h, *props;
 	FILE *fp;
 	size_t len;
