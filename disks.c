@@ -378,7 +378,7 @@ RB_HEAD(env_vars, env_var);
 static int
 env_var_cmp(struct env_var *e1, struct env_var *e2)
 {
-	return (strcmp(e1->name, e2->name));
+	return strcmp(e1->name, e2->name);
 }
 
 RB_GENERATE_STATIC(env_vars, env_var, entry, env_var_cmp);
@@ -399,7 +399,7 @@ env_merge(const nvlist_t *props)
 	nvars = 0;
 	RB_INIT(&merge_tree);
 	/* XXX: assuming environ is not modified */
-	for (char **p = environ; *p != NULL; p++) {
+	for (char **p = environ; *p != NULL; p++, nvars++) {
 		var = calloc(1, sizeof(*var));
 		assert(var != NULL);
 		var->name = strdup(*p);
@@ -411,7 +411,6 @@ env_merge(const nvlist_t *props)
 		existing = RB_INSERT(env_vars, &merge_tree, var);
 		/* XXX: assuming no duplicates in environ */
 		assert(existing == NULL);
-		nvars++;
 	}
 	env = dnvlist_get_nvlist(props, "env", NULL);
 	if (env != NULL) {
@@ -436,8 +435,9 @@ env_merge(const nvlist_t *props)
 				nvars++;
 			} else {
 				free(existing->name);
-				if (existing->free_value)
+				if (existing->free_value) {
 					free(existing->value);
+				}
 				existing->name = var->name;
 				existing->value = var->value;
 				existing->free_value = var->free_value;
@@ -451,7 +451,7 @@ env_merge(const nvlist_t *props)
 	assert(tofree != NULL);
 	i = 0;
 	RB_FOREACH(var, env_vars, &merge_tree) {
-		asprintf(&environment[i], "%s=%s", var->name, var->value);
+		(void)asprintf(&environment[i], "%s=%s", var->name, var->value);
 		assert(environment[i] != NULL);
 		tofree[i] = var;
 		i++;
@@ -459,8 +459,9 @@ env_merge(const nvlist_t *props)
 	for (i = 0; i < nvars; i++) {
 		var = tofree[i];
 		free(var->name);
-		if (var->free_value)
+		if (var->free_value) {
 			free(var->value);
+		}
 		free(var);
 	}
 	free(tofree);
@@ -470,8 +471,9 @@ env_merge(const nvlist_t *props)
 static void
 env_free(char **environment)
 {
-	for (char **p = environment; *p != NULL; p++)
+	for (char **p = environment; *p != NULL; p++) {
 		free(*p);
+	}
 	free(environment);
 }
 
@@ -485,8 +487,9 @@ hook_open(const nvlist_t *props, const char *command, pid_t *pidp)
 	int pfd[2];
 	int error;
 
-	if (pipe2(pfd, O_CLOEXEC) < 0)
+	if (pipe2(pfd, O_CLOEXEC) < 0) {
 		return NULL;
+	}
 	fp = fdopen(pfd[0], "r+");
 	if (fp == NULL) {
 		(void)close(pfd[1]);
