@@ -11,11 +11,14 @@
 #include <sys/ioctl.h>
 #include <sys/nv.h>
 #include <sys/stat.h>
+#include <sys/tree.h>
+#include <sys/wait.h>
 #include <assert.h>
 #include <fcntl.h>
 #include <paths.h>
 #include <pthread.h>
 #include <signal.h>
+#include <spawn.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -356,27 +359,180 @@ disks_config_complete(void)
 	return 0;
 }
 
-static void
-apply_env(const nvlist_t *props)
-{
-	const nvlist_t *env;
+/*
+ * We use an RB tree to merge the current environment with the configured
+ * environment.  The tree nodes contain name and value pointers.  Either the
+ * name and value are separate allocations, in which case free_value is set, or
+ * name is the sole allocation and value points to the byte after the terminator
+ * for the name string.
+ */
+struct env_var {
+	RB_ENTRY(env_var) entry;
+	char *name;
+	char *value;
+	bool free_value;
+};
 
+RB_HEAD(env_vars, env_var);
+
+static int
+env_var_cmp(struct env_var *e1, struct env_var *e2)
+{
+	return (strcmp(e1->name, e2->name));
+}
+
+RB_GENERATE_STATIC(env_vars, env_var, entry, env_var_cmp);
+
+extern char **environ; /* environ(7) */
+
+static char **
+env_merge(const nvlist_t *props)
+{
+	struct env_vars merge_tree;
+	struct env_var *var, *existing;
+	struct env_var **tofree;
+	const nvlist_t *env;
+	char **environment;
+	size_t nvars;
+	int i;
+
+	nvars = 0;
+	RB_INIT(&merge_tree);
+	/* XXX: assuming environ is not modified */
+	for (char **p = environ; *p != NULL; p++) {
+		var = calloc(1, sizeof(*var));
+		assert(var != NULL);
+		var->name = strdup(*p);
+		assert(var->name != NULL);
+		var->value = strchr(var->name, '=');
+		assert(var->value != NULL);
+		*var->value = '\0';
+		var->value++;
+		existing = RB_INSERT(env_vars, &merge_tree, var);
+		/* XXX: assuming no duplicates in environ */
+		assert(existing == NULL);
+		nvars++;
+	}
 	env = dnvlist_get_nvlist(props, "env", NULL);
-	/* FIXME: don't modify current environment */
 	if (env != NULL) {
-		const char *var, *val;
+		const char *name, *value;
 		void *cookie;
-		int type, error;
+		int type;
 
 		cookie = NULL;
-		while ((var = nvlist_next(env, &type, &cookie)) != NULL) {
+		while ((name = nvlist_next(env, &type, &cookie)) != NULL) {
 			assert(type == NV_TYPE_STRING);
-			val = cnvlist_get_string(cookie);
-			/* XXX */
-			error = setenv(var, val, 1);
-			assert(error == 0);
+			value = cnvlist_get_string(cookie);
+			assert(value != NULL);
+			var = calloc(1, sizeof(*var));
+			assert(var != NULL);
+			var->name = strdup(name);
+			assert(var->name != NULL);
+			var->value = strdup(value);
+			assert(var->value != NULL);
+			var->free_value = true;
+			existing = RB_INSERT(env_vars, &merge_tree, var);
+			if (existing == NULL) {
+				nvars++;
+			} else {
+				free(existing->name);
+				if (existing->free_value)
+					free(existing->value);
+				existing->name = var->name;
+				existing->value = var->value;
+				existing->free_value = var->free_value;
+				free(var);
+			}
 		}
 	}
+	environment = calloc(nvars + 1, sizeof(*environment));
+	assert(environment != NULL);
+	tofree = calloc(nvars, sizeof(*tofree));
+	assert(tofree != NULL);
+	i = 0;
+	RB_FOREACH(var, env_vars, &merge_tree) {
+		asprintf(&environment[i], "%s=%s", var->name, var->value);
+		assert(environment[i] != NULL);
+		tofree[i] = var;
+		i++;
+	}
+	for (i = 0; i < nvars; i++) {
+		var = tofree[i];
+		free(var->name);
+		if (var->free_value)
+			free(var->value);
+		free(var);
+	}
+	free(tofree);
+	return environment;
+}
+
+static void
+env_free(char **environment)
+{
+	for (char **p = environment; *p != NULL; p++)
+		free(*p);
+	free(environment);
+}
+
+static FILE *
+hook_open(const nvlist_t *props, const char *command, pid_t *pidp)
+{
+	posix_spawn_file_actions_t file_actions;
+	char *argv[4];
+	char **envp;
+	FILE *fp;
+	int pfd[2];
+	int error;
+
+	if (pipe2(pfd, O_CLOEXEC) < 0)
+		return NULL;
+	fp = fdopen(pfd[0], "r+");
+	if (fp == NULL) {
+		(void)close(pfd[1]);
+		(void)close(pfd[0]);
+		return NULL;
+	}
+	argv[0] = "sh";
+	argv[1] = "-c";
+	argv[2] = __DECONST(char *, command);
+	argv[3] = NULL;
+	envp = env_merge(props);
+	assert(envp != NULL);
+	error = posix_spawn_file_actions_init(&file_actions);
+	assert(error == 0);
+	error = posix_spawn_file_actions_adddup2(&file_actions, pfd[1], STDIN_FILENO);
+	assert(error == 0);
+	error = posix_spawn_file_actions_adddup2(&file_actions, pfd[1], STDOUT_FILENO);
+	assert(error == 0);
+	error = posix_spawn_file_actions_addclosefrom_np(&file_actions, STDERR_FILENO + 1);
+	assert(error == 0);
+	error = posix_spawn(pidp, _PATH_BSHELL, &file_actions, NULL, argv, envp);
+	env_free(envp);
+	if (error != 0) {
+		(void)posix_spawn_file_actions_destroy(&file_actions);
+		(void)close(pfd[1]);
+		(void)fclose(fp);
+		return NULL;
+	}
+	error = posix_spawn_file_actions_destroy(&file_actions);
+	assert(error == 0);
+	error = close(pfd[1]);
+	assert(error == 0);
+	return fp;
+}
+
+static int
+hook_close(FILE *fp, pid_t pid)
+{
+	pid_t res;
+	int status;
+
+	(void)fclose(fp);
+	do {
+		res = waitpid(pid, &status, 0);
+	} while (res == -1 && errno == EINTR);
+	return res == -1 ? -1 : status;
 }
 
 static int
@@ -391,6 +547,7 @@ disks_list_exports(int readonly, int is_tls, struct nbdkit_exports *exports)
 	char *p, *p1;
 	FILE *fp;
 	size_t len;
+	pid_t pid;
 	int type, error, res;
 
 	error = pthread_rwlock_rdlock(&config_lock);
@@ -407,8 +564,7 @@ disks_list_exports(int readonly, int is_tls, struct nbdkit_exports *exports)
 			assert(error == 0);
 			continue;
 		}
-		apply_env(props);
-		fp = popen(cmd, "r+e");
+		fp = hook_open(props, cmd, &pid);
 		if (fp == NULL) {
 			nbdkit_error("list command '%s' failed", cmd);
 			res = -1;
@@ -417,8 +573,7 @@ disks_list_exports(int readonly, int is_tls, struct nbdkit_exports *exports)
 		error = fprintf(fp, "%s\n", name);
 		if (error < 0) {
 			nbdkit_error("list command '%s' failed", cmd);
-			error = pclose(fp);
-			assert(error != -1);
+			(void)hook_close(fp, pid);
 			res = -1;
 			break;
 		}
@@ -465,7 +620,7 @@ disks_list_exports(int readonly, int is_tls, struct nbdkit_exports *exports)
 				break;
 			}
 		}
-		error = pclose(fp);
+		error = hook_close(fp, pid);
 		assert(error != -1);
 		if (res == -1) {
 			break;
@@ -485,6 +640,7 @@ disks_open(int readonly)
 	nvlist_t *h, *props;
 	FILE *fp;
 	size_t len;
+	pid_t pid;
 	int type, flags, fd, error;
 
 	name = nbdkit_export_name();
@@ -509,8 +665,7 @@ disks_open(int readonly)
 	}
 	cmd = dnvlist_get_string(props, "open", NULL);
 	if (cmd != NULL) {
-		apply_env(props);
-		fp = popen(cmd, "r+e");
+		fp = hook_open(props, cmd, &pid);
 		if (fp == NULL) {
 			nbdkit_error("open command '%s' failed", cmd);
 			nvlist_destroy(props);
@@ -519,8 +674,7 @@ disks_open(int readonly)
 		error = fprintf(fp, "%s\n", name);
 		if (error < 0) {
 			nbdkit_error("open command '%s' failed", cmd);
-			error = pclose(fp);
-			assert(error != -1);
+			(void)hook_close(fp, pid);
 			nvlist_destroy(props);
 			return NULL;
 		}
@@ -536,7 +690,7 @@ disks_open(int readonly)
 		} else {
 			path = NULL;
 		}
-		error = pclose(fp);
+		error = hook_close(fp, pid);
 		assert(error != -1);
 		if (path != NULL) {
 			if (nvlist_exists_string(props, "path")) {
@@ -583,6 +737,7 @@ disks_close(void *handle)
 	nvlist_t *props = handle;
 	const char *cmd, *name, *path;
 	FILE *fp;
+	pid_t pid;
 	int error;
 
 	/* Close the descriptor *before* the hook runs. */
@@ -592,14 +747,13 @@ disks_close(void *handle)
 		name = nbdkit_export_name();
 		assert(name != NULL);
 		path = nvlist_get_string(props, "path");
-		apply_env(props);
-		fp = popen(cmd, "r+e");
+		fp = hook_open(props, cmd, &pid);
 		if (fp == NULL) {
 			nbdkit_error("close command '%s' failed", cmd);
 		} else if (fprintf(fp, "%s\n%s\n", name, path) < 0) {
 			nbdkit_error("close command '%s' failed", cmd);
 		}
-		error = pclose(fp);
+		error = hook_close(fp, pid);
 		assert(error != -1);
 	}
 	nvlist_destroy(props);

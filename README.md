@@ -144,8 +144,7 @@ The full set of recognized properties are:
 }
 ```
 
-Hook commands are passed directly to `popen(3)`, so are evaluated by /bin/sh.
-Use with care.
+Hook commands are evaluated by /bin/sh. Use with care.
 
 Only disk-like devices on FreeBSD are currently supported by this plugin.  For
 regular files or for block devices on Linux, use `nbdkit-file-plugin(1)`.
