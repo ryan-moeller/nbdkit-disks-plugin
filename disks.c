@@ -853,7 +853,6 @@ disks_block_size(void *handle, uint32_t *minimum, uint32_t *preferred,
 	const int mib[] = { CTL_KERN, KERN_MAXPHYS };
 	nvlist_t *props = handle;
 	size_t len;
-	off_t stripesize;
 	u_long maxphys;
 	u_int sectorsize;
 	int fd;
@@ -865,16 +864,7 @@ disks_block_size(void *handle, uint32_t *minimum, uint32_t *preferred,
 		return -1;
 	}
 	*minimum = MAX(512, sectorsize);
-	if (ioctl(fd, DIOCGSTRIPESIZE, &stripesize) == -1) {
-		nbdkit_error("ioctl: DIOCGSTRIPESIZE failed, probably not a "
-		    "disk: %s: %m", nvlist_get_string(props, "path"));
-		return -1;
-	}
-	if (stripesize == 0) {
-		stripesize = MAX(4096, sectorsize);
-		nbdkit_debug("stripesize = 0, falling back to %jd", stripesize);
-	}
-	*preferred = MAX(*minimum, stripesize);
+	*preferred = MAX(4096, *minimum);
 	len = sizeof(maxphys);
 	if (sysctl(mib, nitems(mib), &maxphys, &len, NULL, 0) == -1) {
 		nbdkit_error("sysctl: failed to get kern.maxphys: %m");
