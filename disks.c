@@ -553,6 +553,7 @@ disks_list_exports(int readonly, int is_tls, struct nbdkit_exports *exports)
 	while ((name = nvlist_next(current_config, &type, &cookie)) != NULL) {
 		assert(type == NV_TYPE_NVLIST);
 		props = cnvlist_get_nvlist(cookie);
+		assert(props != NULL);
 		cmd = dnvlist_get_string(props, "list", NULL);
 		if (cmd == NULL) {
 			desc = dnvlist_get_string(props, "description", NULL);
