@@ -17,8 +17,10 @@
 #include <fcntl.h>
 #include <paths.h>
 #include <pthread.h>
+#include <semaphore.h>
 #include <signal.h>
 #include <spawn.h>
+#include <stdatomic.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -48,9 +50,8 @@ static void *config_routine(void *);
 static const char *filename;			/* config file path */
 static nvlist_t *current_config;		/* export => props dict */
 static pthread_rwlock_t config_lock;		/* protects current_config */
-static pthread_cond_t config_cond;		/* signal to reload config */
-static bool exiting;				/* breaks config reload loop */
-static pthread_mutex_t config_cond_lock;	/* protects config_cond */
+static sem_t config_reload;			/* signal to reload config */
+static _Atomic(bool) exiting;			/* breaks config reload loop */
 static pthread_t config_thread;			/* reloads config on signal */
 
 static void
@@ -59,10 +60,10 @@ sigusr1_handler(int signal __unused)
 	int error;
 
 	/*
-	 * XXX: Not sure it's safe to reload config in async signal handler, so
+	 * It's unsafe to reload the config in an async signal handler, so
 	 * signal a thread to do it outside of the handler.
 	 */
-	error = pthread_cond_signal(&config_cond);
+	error = sem_post(&config_reload);
 	assert(error == 0);
 }
 
@@ -74,9 +75,7 @@ disks_load(void)
 
 	error = pthread_rwlock_init(&config_lock, NULL);
 	assert(error == 0);
-	error = pthread_cond_init(&config_cond, NULL);
-	assert(error == 0);
-	error = pthread_mutex_init(&config_cond_lock, NULL);
+	error = sem_init(&config_reload, 0, 0);
 	assert(error == 0);
 	error = pthread_create(&config_thread, NULL, config_routine, NULL);
 	assert(error == 0);
@@ -98,19 +97,13 @@ disks_unload(void)
 	sa.sa_handler = SIG_DFL;
 	error = sigaction(SIGUSR1, &sa, NULL);
 	assert(error == 0);
-	error = pthread_mutex_lock(&config_cond_lock);
-	assert(error == 0);
-	exiting = true;
-	error = pthread_mutex_unlock(&config_cond_lock);
-	assert(error == 0);
-	error = pthread_cond_signal(&config_cond);
+	atomic_store(&exiting, true);
+	error = sem_post(&config_reload);
 	assert(error == 0);
 	(void)pthread_join(config_thread, NULL);
 	free(__DECONST(char *, filename));
 	nvlist_destroy(current_config);
-	error = pthread_cond_destroy(&config_cond);
-	assert(error == 0);
-	error = pthread_mutex_destroy(&config_cond_lock);
+	error = sem_destroy(&config_reload);
 	assert(error == 0);
 	error = pthread_rwlock_destroy(&config_lock);
 	assert(error == 0);
@@ -300,15 +293,16 @@ config_routine(void *arg)
 	nvlist_t *config, *old_config;
 	int error;
 
-	error = pthread_mutex_lock(&config_cond_lock);
-	assert(error == 0);
 	for (;;) {
-		error = pthread_cond_wait(&config_cond, &config_cond_lock);
-		assert(error == 0);
-		if (exiting) {
+		error = sem_wait(&config_reload);
+		if (atomic_load(&exiting)) {
 			nbdkit_debug("config thread exiting");
 			break;
 		}
+		if (error != 0 && errno == EINTR) {
+			continue;
+		}
+		assert(error == 0);
 		nbdkit_debug("reloading config");
 		config = parse_config();
 		if (config == NULL) {
@@ -323,8 +317,6 @@ config_routine(void *arg)
 		assert(error == 0);
 		nvlist_destroy(old_config);
 	}
-	error = pthread_mutex_unlock(&config_cond_lock);
-	assert(error == 0);
 	return NULL;
 }
 
