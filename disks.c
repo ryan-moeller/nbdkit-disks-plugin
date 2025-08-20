@@ -100,7 +100,8 @@ disks_unload(void)
 	atomic_store(&exiting, true);
 	error = sem_post(&config_reload);
 	assert(error == 0);
-	(void)pthread_join(config_thread, NULL);
+	error = pthread_join(config_thread, NULL);
+	assert(error == 0 || error == ESRCH);
 	free(__DECONST(char *, filename));
 	nvlist_destroy(current_config);
 	error = sem_destroy(&config_reload);
