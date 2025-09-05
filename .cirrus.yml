@@ -34,8 +34,8 @@ task:
       libucl
       pkgconf
       zstd
-    - git clone --branch ${NBDKIT_TAG} https://gitlab.com/nbdkit/nbdkit ${NBDKIT}
   nbdkit_build_script:
+    - git clone --branch ${NBDKIT_TAG} https://gitlab.com/nbdkit/nbdkit ${NBDKIT}
     - cd ${NBDKIT} && autoreconf -i && ./configure
     - cd ${NBDKIT} && gmake -j${CIRRUS_CPU} && gmake install
   build_script:
