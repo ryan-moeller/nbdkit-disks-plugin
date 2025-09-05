@@ -15,7 +15,7 @@ task:
         image_family: freebsd-15-0-snap
   stateful: false
   env:
-    NBDKIT_TAG: v1.44.0
+    NBDKIT_TAG: v1.45.7
     NBDKIT: /tmp/nbdkit
     PATH: /usr/local/sbin:${PATH}
 
