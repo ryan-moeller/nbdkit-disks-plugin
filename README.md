@@ -2,7 +2,7 @@
 
 [![13.5-RELEASE Build Status](https://api.cirrus-ci.com/github/ryan-moeller/nbdkit-disks-plugin.svg?branch=main&task=releases/amd64/13.5-RELEASE)](https://cirrus-ci.com/github/ryan-moeller/nbdkit-disks-plugin)
 [![14.3-RELEASE Build Status](https://api.cirrus-ci.com/github/ryan-moeller/nbdkit-disks-plugin.svg?branch=main&task=releases/amd64/14.3-RELEASE)](https://cirrus-ci.com/github/ryan-moeller/nbdkit-disks-plugin)
-[![15.0-CURRENT Build Status](https://api.cirrus-ci.com/github/ryan-moeller/nbdkit-disks-plugin.svg?branch=main&task=snapshots/amd64/15.0-CURRENT)](https://cirrus-ci.com/github/ryan-moeller/nbdkit-disks-plugin)
+[![15.0-PRERELEASE Build Status](https://api.cirrus-ci.com/github/ryan-moeller/nbdkit-disks-plugin.svg?branch=main&task=snapshots/amd64/15.0-PRERELEASE)](https://cirrus-ci.com/github/ryan-moeller/nbdkit-disks-plugin)
 
 [nbdkit](https://gitlab.com/nbdkit/nbdkit) does not support serving FreeBSD disk
 devices such as ATA disks, SCSI disks, or ZFS volumes.  This plugin implements
