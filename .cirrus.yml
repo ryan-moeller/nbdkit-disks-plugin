@@ -15,7 +15,7 @@ task:
         image_family: freebsd-15-0-amd64-ufs
   stateful: false
   env:
-    NBDKIT_TAG: v1.45.7
+    NBDKIT_TAG: v1.45.13
     NBDKIT: /tmp/nbdkit
     PATH: /usr/local/sbin:${PATH}
 
